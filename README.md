@@ -123,8 +123,9 @@ X-API-Key: change-me
 
 ## Documentation
 
+- **API Documentation (PDF):** [docs/api-documentation.pdf](docs/api-documentation.pdf) — all endpoints, parameters, response formats, example requests/responses (JSON), authentication, and error codes.  
+- **Swagger UI (interactive):** When the API is running, open [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs) for try-it-out API docs; [http://127.0.0.1:8000/redoc](http://127.0.0.1:8000/redoc) for ReDoc.
 - Scope and implementation decisions: `docs/project-scope.md`
-- Endpoint overview: `docs/api-overview.md`
 - Data sources: `docs/data-sources.md`
 - Data dictionary: `docs/data-dictionary.md`
 
