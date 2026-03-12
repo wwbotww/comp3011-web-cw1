@@ -68,6 +68,26 @@ uvicorn app.main:app --reload
 
 ## Data Pipeline
 
+```mermaid
+flowchart TB
+  subgraph timetable["Timetable pipeline"]
+    A[BODS Timetable API\nmetadata + ZIP/XML] --> B[fetch_bods_timetables.py]
+    B --> C[Raw timetable files\ndata/raw/bods_timetables/]
+    C --> D[Parse TransXChange XML]
+    D --> E[operators.csv, routes.csv\nstops.csv, route_stops.csv]
+  end
+  subgraph vehicle["Vehicle pipeline"]
+    F[BODS Vehicle Datafeed\nSIRI-VM XML] --> G[fetch_bods_vehicle_snapshots.py]
+    G --> H[Raw vehicle snapshots\ndata/raw/bods_vehicle_snapshots/]
+    H --> I[build_reliability_metrics.py]
+    I --> J[reliability_metrics.csv]
+  end
+  E --> K[import_data.py]
+  J --> K
+  K --> L[SQLite database\nleeds_bus_api.db]
+  L --> M[FastAPI service]
+```
+
 1. Fetch Leeds timetable metadata and files from BODS
 2. Parse `TransXChange` timetable files into `operators`, `routes`, `stops`, and `route_stops`
 3. Fetch BODS vehicle location snapshots for a fixed time window
