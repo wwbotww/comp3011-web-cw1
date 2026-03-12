@@ -11,6 +11,9 @@ class Settings(BaseSettings):
     write_api_key: str = "change-me"
     bods_api_key: str = ""
     data_root: Path = Path("data")
+    bods_max_datasets: int = 1
+    bods_max_xml_files_per_dataset: int = 8
+    bods_preferred_locality: str = "Leeds"
 
     model_config = SettingsConfigDict(
         env_file=".env",

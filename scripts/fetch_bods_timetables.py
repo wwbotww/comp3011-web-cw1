@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import csv
 import json
+import sys
 import zipfile
 from pathlib import Path
 from typing import Optional
@@ -9,6 +10,10 @@ from urllib.parse import urlparse
 from xml.etree import ElementTree as ET
 
 import requests
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
 
 from app.core.config import settings
 from scripts.bods_utils import (
@@ -31,6 +36,75 @@ LEEDS_ADMIN_AREA = "450"
 
 def next_id(sequence: list[dict]) -> int:
     return len(sequence) + 1
+
+
+def clear_directory_files(directory: Path) -> None:
+    directory.mkdir(parents=True, exist_ok=True)
+    for path in directory.iterdir():
+        if path.is_file() and path.name != ".gitkeep":
+            path.unlink()
+
+
+def dataset_priority(record: dict) -> tuple:
+    preferred = settings.bods_preferred_locality.lower().strip()
+    localities = record.get("localities") or []
+    locality_names = [
+        normalise_text(item.get("name"))
+        for item in localities
+        if isinstance(item, dict) and item.get("name")
+    ]
+    text_blob = " ".join(
+        [
+            normalise_text(record.get("operatorName")),
+            normalise_text(record.get("name")),
+            normalise_text(record.get("description")),
+            " ".join(locality_names),
+        ]
+    ).lower()
+
+    has_preferred_locality = preferred in text_blob
+    has_leeds_noc = "flds" in [str(noc).lower() for noc in (record.get("noc") or [])]
+    line_count = len(record.get("lines") or [])
+    modified = record.get("modified") or ""
+    dataset_id = int(record.get("id") or 0)
+    # Sort by most Leeds-like first, then smaller datasets first, then newest, then id.
+    return (
+        0 if has_preferred_locality else 1,
+        0 if has_leeds_noc else 1,
+        line_count,
+        modified,
+        dataset_id,
+    )
+
+
+def select_demo_datasets(records: list[dict]) -> list[dict]:
+    sorted_records = sorted(records, key=dataset_priority)
+    preferred = settings.bods_preferred_locality.lower().strip()
+
+    strict_matches = []
+    fallback_matches = []
+    for record in sorted_records:
+        localities = record.get("localities") or []
+        locality_names = [
+            normalise_text(item.get("name"))
+            for item in localities
+            if isinstance(item, dict) and item.get("name")
+        ]
+        text_blob = " ".join(
+            [
+                normalise_text(record.get("operatorName")),
+                normalise_text(record.get("name")),
+                normalise_text(record.get("description")),
+                " ".join(locality_names),
+            ]
+        ).lower()
+        if preferred in text_blob:
+            strict_matches.append(record)
+        else:
+            fallback_matches.append(record)
+
+    chosen_pool = strict_matches or fallback_matches
+    return chosen_pool[: settings.bods_max_datasets]
 
 
 def ensure_processed_templates(processed_dir: Path) -> None:
@@ -148,7 +222,10 @@ def download_dataset_files(metadata_records: list[dict], raw_dir: Path) -> list[
             else:
                 return
 
-        filename = f"{dataset_prefix}_{Path(parsed.path).name or 'dataset' + suffix}"
+        base_name = Path(parsed.path).name or "dataset"
+        if Path(base_name).suffix.lower() != suffix:
+            base_name = f"{base_name}{suffix}"
+        filename = f"{dataset_prefix}_{base_name}"
         output_path = raw_dir / filename
         ensure_parent(output_path)
         output_path.write_bytes(response.content)
@@ -169,7 +246,8 @@ def extract_xml_roots(raw_dir: Path) -> list[ET.Element]:
             roots.append(parse_xml_bytes(path.read_bytes()))
         elif path.suffix.lower() == ".zip":
             with zipfile.ZipFile(path) as archive:
-                for member in archive.namelist():
+                xml_members = [member for member in archive.namelist() if member.lower().endswith(".xml")]
+                for member in xml_members[: settings.bods_max_xml_files_per_dataset]:
                     if member.lower().endswith(".xml"):
                         roots.append(parse_xml_bytes(archive.read(member)))
     return roots
@@ -399,7 +477,8 @@ def build_processed_outputs(roots: list[ET.Element], processed_dir: Path) -> Non
 def main() -> None:
     raw_dir = settings.data_root / "raw" / "bods_timetables"
     processed_dir = settings.data_root / "processed"
-    raw_dir.mkdir(parents=True, exist_ok=True)
+    clear_directory_files(raw_dir)
+    clear_directory_files(processed_dir)
     ensure_processed_templates(processed_dir)
 
     try:
@@ -408,12 +487,14 @@ def main() -> None:
         print(f"Skipping BODS fetch: {exc}")
         return
 
+    selected_records = select_demo_datasets(metadata_records)
     output_path = raw_dir / "datasets.json"
-    output_path.write_text(json.dumps(metadata_records, indent=2), encoding="utf-8")
-    downloaded_files = download_dataset_files(metadata_records, raw_dir)
+    output_path.write_text(json.dumps(selected_records, indent=2), encoding="utf-8")
+    downloaded_files = download_dataset_files(selected_records, raw_dir)
     roots = extract_xml_roots(raw_dir)
     build_processed_outputs(roots, processed_dir)
     print(f"Saved timetable metadata to {output_path}")
+    print(f"Selected {len(selected_records)} datasets for demo mode.")
     print(f"Downloaded {len(downloaded_files)} timetable files and processed {len(roots)} XML documents.")
 
 
