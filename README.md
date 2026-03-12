@@ -73,7 +73,7 @@ uvicorn app.main:app --reload
 3. Fetch BODS vehicle location snapshots for a fixed time window
 4. Parse `SIRI-VM` vehicle snapshots into route-level reliability metrics
 5. Import processed CSV files into SQLite
-6. Optionally seed demo incidents for local showcase data
+6. Start the API and use the incident endpoints to create demo records if needed
 
 Example commands:
 
@@ -82,7 +82,6 @@ python scripts/fetch_bods_timetables.py
 python scripts/fetch_bods_vehicle_snapshots.py
 python scripts/build_reliability_metrics.py
 python scripts/import_data.py
-python scripts/seed_demo_data.py
 ```
 
 Notes:
@@ -90,7 +89,6 @@ Notes:
 - `fetch_bods_timetables.py` downloads real BODS timetable dataset files and extracts route and stop records from `TransXChange` XML
 - `fetch_bods_vehicle_snapshots.py` stores raw vehicle snapshot responses, typically `SIRI-VM` XML
 - `build_reliability_metrics.py` maps parsed vehicle activities to imported routes and computes aggregated reliability metrics
-- `seed_demo_data.py` is optional and only intended as a fallback demo dataset when real BODS data has not yet been loaded
 
 ## API Authentication
 
